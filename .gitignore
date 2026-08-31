@@ -1,0 +1,20 @@
+# Build output
+/bin/
+/aehenamer
+*.exe
+*.test
+
+# Test, coverage, and profiling artifacts
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
