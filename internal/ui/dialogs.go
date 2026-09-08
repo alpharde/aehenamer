@@ -67,19 +67,13 @@ func (a *App) openOperationDialog(ctx context.Context, kind ops.Kind, cfg ops.Co
 	}
 
 	switch kind {
-	case ops.KindReplace, ops.KindRemove:
-		target := "Replace target"
-		if kind == ops.KindRemove {
-			target = "Remove target"
-		}
-		text(target, cfg.Target, func(v string) { cfg.Target = v })
-		if kind == ops.KindReplace {
-			text("Replacement", cfg.Replacement, func(v string) { cfg.Replacement = v })
-		}
+	case ops.KindReplace:
+		text("Replace target", cfg.Target, func(v string) { cfg.Target = v })
+		text("Replacement", cfg.Replacement, func(v string) { cfg.Replacement = v })
 		number("Limit (0 = all)", cfg.Limit, acceptInt, func(v string) { cfg.Limit = v })
 		check("From start", cfg.FromStart, func(v bool) { cfg.FromStart = v })
 		check("Case sensitive", cfg.CaseSensitive, func(v bool) { cfg.CaseSensitive = v })
-		check(strings.ToLower(string(kind))+" target is regex", cfg.Regex, func(v bool) { cfg.Regex = v })
+		check("Replace target is regex", cfg.Regex, func(v bool) { cfg.Regex = v })
 		check("Preserve extension", cfg.PreserveExt, func(v bool) { cfg.PreserveExt = v })
 
 	case ops.KindInsert:
@@ -202,9 +196,7 @@ func (a *App) confirmApply(ctx context.Context) {
 		})
 	modal.SetInputCapture(dismissOnEscape(func() { a.closeDialog(pageConfirm) }))
 
-	a.dialogFocus[pageConfirm] = a.app.GetFocus()
-	a.pages.AddPage(pageConfirm, modal, true, true)
-	a.app.SetFocus(modal)
+	a.showOverlay(pageConfirm, modal, modal)
 }
 
 // applyRename performs the rename on disk and reloads the folder.
@@ -230,9 +222,7 @@ func (a *App) showMessage(title, body string) {
 		SetDoneFunc(func(int, string) { a.closeDialog(pageMessage) })
 	modal.SetInputCapture(dismissOnEscape(func() { a.closeDialog(pageMessage) }))
 
-	a.dialogFocus[pageMessage] = a.app.GetFocus()
-	a.pages.AddPage(pageMessage, modal, true, true)
-	a.app.SetFocus(modal)
+	a.showOverlay(pageMessage, modal, modal)
 }
 
 // helpText lists every key binding of the interface.
@@ -292,9 +282,44 @@ func dismissOnEscape(close func()) func(*tcell.EventKey) *tcell.EventKey {
 
 // showDialog puts p on top of the main layout as a centred floating window.
 func (a *App) showDialog(name string, p tview.Primitive, width, height int) {
+	a.showOverlay(name, p, center(p, width, height))
+}
+
+// showOverlay adds a full-screen modal layer and focuses its interactive
+// content. Mouse events not handled by the content are consumed by the layer
+// instead of falling through to the main page.
+func (a *App) showOverlay(name string, focus, layout tview.Primitive) {
 	a.dialogFocus[name] = a.app.GetFocus()
-	a.pages.AddPage(name, center(p, width, height), true, true)
-	a.app.SetFocus(p)
+	a.pages.AddPage(name, newFocusTrap(layout, focus), true, true)
+	a.app.SetFocus(focus)
+}
+
+// focusTrap is a modal primitive which delegates rendering and input to its
+// layout while preventing unhandled mouse events from reaching lower pages.
+type focusTrap struct {
+	tview.Primitive
+	focus tview.Primitive
+}
+
+// newFocusTrap returns a modal wrapper around layout.
+func newFocusTrap(layout, focus tview.Primitive) *focusTrap {
+	return &focusTrap{Primitive: layout, focus: focus}
+}
+
+// MouseHandler forwards events to the overlay and consumes any event it does
+// not handle. Clicking outside the content restores focus inside the overlay.
+func (t *focusTrap) MouseHandler() func(tview.MouseAction, *tcell.EventMouse, func(tview.Primitive)) (bool, tview.Primitive) {
+	return func(action tview.MouseAction, event *tcell.EventMouse, setFocus func(tview.Primitive)) (bool, tview.Primitive) {
+		if handler := t.Primitive.MouseHandler(); handler != nil {
+			if consumed, capture := handler(action, event, setFocus); consumed {
+				return true, capture
+			}
+		}
+		if action == tview.MouseLeftDown && !t.focus.HasFocus() {
+			setFocus(t.focus)
+		}
+		return true, nil
+	}
 }
 
 // closeDialog removes a floating window and restores the previous focus.

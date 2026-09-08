@@ -18,7 +18,6 @@ type Kind string
 // The supported operation kinds.
 const (
 	KindReplace   Kind = "Replace"
-	KindRemove    Kind = "Remove"
 	KindInsert    Kind = "Insert"
 	KindIncrement Kind = "Increment"
 	KindLower     Kind = "To lowercase"
@@ -29,7 +28,6 @@ const (
 // Kinds lists every supported operation kind, in menu order.
 var Kinds = []Kind{
 	KindReplace,
-	KindRemove,
 	KindInsert,
 	KindIncrement,
 	KindLower,
@@ -48,9 +46,9 @@ const ToLast = "to-last"
 type Config struct {
 	Kind Kind
 
-	Target      string // Replace, Remove: the text or pattern to look for.
+	Target      string // Replace: the text or pattern to look for.
 	Replacement string // Replace: the text to put in its place.
-	Limit       string // Replace, Remove: max number of matches, empty or 0 for all.
+	Limit       string // Replace: max number of matches, empty or 0 for all.
 	Text        string // Insert: the text to insert.
 	Index       string // Insert: character position, or ToLast for the end.
 	Prefix      string // Increment: text placed before the counter.
@@ -59,9 +57,9 @@ type Config struct {
 	First       string // Truncate: first character index, or ToLast.
 	Last        string // Truncate: last character index, or ToLast.
 
-	FromStart     bool // Replace, Remove: apply Limit to the first matches instead of the last.
-	CaseSensitive bool // Replace, Remove: match letter case exactly.
-	Regex         bool // Replace, Remove: treat Target as a regular expression.
+	FromStart     bool // Replace: apply Limit to the first matches instead of the last.
+	CaseSensitive bool // Replace: match letter case exactly.
+	Regex         bool // Replace: treat Target as a regular expression.
 	KeepBetween   bool // Truncate: keep the selected range instead of removing it.
 	PreserveExt   bool // All kinds: leave the file extension untouched.
 }
@@ -98,7 +96,7 @@ type Operation interface {
 // cannot be parsed or a regular expression does not compile.
 func New(cfg Config) (Operation, error) {
 	switch cfg.Kind {
-	case KindReplace, KindRemove:
+	case KindReplace:
 		return newSubstitute(cfg)
 	case KindInsert:
 		return newInsert(cfg)
@@ -185,8 +183,8 @@ func compileTarget(cfg Config) (*regexp.Regexp, error) {
 	return re, nil
 }
 
-// substituteOp implements both [KindReplace] and [KindRemove]; a removal is a
-// replacement with empty text.
+// substituteOp implements [KindReplace]. Setting the replacement to an empty
+// string removes matching text.
 type substituteOp struct {
 	cfg   Config
 	re    *regexp.Regexp
@@ -253,11 +251,7 @@ func (o *substituteOp) substitute(s string) string {
 
 func (o *substituteOp) Summary() string {
 	var b strings.Builder
-	if o.cfg.Kind == KindRemove {
-		fmt.Fprintf(&b, "Remove %q", o.cfg.Target)
-	} else {
-		fmt.Fprintf(&b, "Replace %q with %q", o.cfg.Target, o.cfg.Replacement)
-	}
+	fmt.Fprintf(&b, "Replace %q with %q", o.cfg.Target, o.cfg.Replacement)
 	flags := []string{}
 	if o.limit > 0 {
 		where := "last"

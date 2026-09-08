@@ -240,6 +240,54 @@ func TestAppCancelledDialogLeavesNoOperation(t *testing.T) {
 	})
 }
 
+func TestOperationDialogTrapsKeyboardAndMouseFocus(t *testing.T) {
+	dir := makeDir(t, "one.txt", "two.txt")
+	app, screen, onLoop := startApp(t, dir)
+	ctx := context.Background()
+
+	onLoop(func() {
+		app.openOperationDialog(ctx, ops.KindReplace, ops.DefaultConfig(ops.KindReplace), -1)
+		// Simulate focus being stolen by an underlying widget. The global key
+		// guard must restore it before dispatching this key.
+		app.app.SetFocus(app.filePane)
+	})
+	screen.InjectKey(tcell.KeyRune, 'x', tcell.ModNone)
+	waitForState(t, onLoop, "keyboard focus to return to the operation dialog", func() bool {
+		page := app.pages.GetPage(pageOperation)
+		return page != nil && page.HasFocus() && len(app.names) == 2
+	})
+
+	// The folder field lies outside the centered form. Clicking it must be
+	// consumed by the modal layer rather than focusing the underlying input.
+	screen.InjectMouse(5, 1, tcell.Button1, tcell.ModNone)
+	screen.InjectMouse(5, 1, tcell.ButtonNone, tcell.ModNone)
+	waitForState(t, onLoop, "mouse focus to remain in the operation dialog", func() bool {
+		page := app.pages.GetPage(pageOperation)
+		return page != nil && page.HasFocus() && !app.dirInput.HasFocus()
+	})
+}
+
+func TestMessageDialogTrapsFocusUntilDismissed(t *testing.T) {
+	dir := makeDir(t, "one.txt")
+	app, screen, onLoop := startApp(t, dir)
+
+	onLoop(func() {
+		app.showMessage("Notice", "Stay modal")
+		app.app.SetFocus(app.filePane)
+	})
+	screen.InjectKey(tcell.KeyRune, 'x', tcell.ModNone)
+	waitForState(t, onLoop, "focus to return to the message", func() bool {
+		page := app.pages.GetPage(pageMessage)
+		return page != nil && page.HasFocus() && len(app.names) == 1
+	})
+
+	screen.InjectKey(tcell.KeyEscape, 0, tcell.ModNone)
+	waitForState(t, onLoop, "the message to be dismissed", func() bool {
+		name, _ := app.pages.GetFrontPage()
+		return name == pageMain
+	})
+}
+
 func TestAppRemovesFilesAndOperations(t *testing.T) {
 	dir := makeDir(t, "one.txt", "two.txt")
 	app, screen, onLoop := startApp(t, dir)

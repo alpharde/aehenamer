@@ -272,7 +272,11 @@ func (a *App) buildControls(ctx context.Context) {
 func (a *App) globalKeys(ctx context.Context) func(*tcell.EventKey) *tcell.EventKey {
 	return func(event *tcell.EventKey) *tcell.EventKey {
 		if name, _ := a.pages.GetFrontPage(); name != pageMain {
-			// A dialog is open; it handles its own keys.
+			// A dialog is open. Restore focus to its modal layer before
+			// dispatch so keys can never reach a page underneath it.
+			if page := a.pages.GetPage(name); page != nil && !page.HasFocus() {
+				a.app.SetFocus(page)
+			}
 			return event
 		}
 		switch event.Key() {

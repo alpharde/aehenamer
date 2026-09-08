@@ -103,7 +103,7 @@ func TestReplace(t *testing.T) {
 	}
 }
 
-func TestRemove(t *testing.T) {
+func TestReplaceWithEmptyReplacementRemovesMatches(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  func(c *ops.Config)
@@ -134,7 +134,7 @@ func TestRemove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := ops.DefaultConfig(ops.KindRemove)
+			cfg := ops.DefaultConfig(ops.KindReplace)
 			tt.cfg(&cfg)
 			if got := apply(t, cfg, tt.in, 0); got != tt.want {
 				t.Errorf("Apply(%q) = %q, want %q", tt.in, got, tt.want)
@@ -282,7 +282,7 @@ func TestNewRejectsBadInput(t *testing.T) {
 		},
 		{
 			name: "negative limit",
-			cfg:  ops.Config{Kind: ops.KindRemove, Target: "a", Limit: "-2"},
+			cfg:  ops.Config{Kind: ops.KindReplace, Target: "a", Limit: "-2"},
 			want: "must not be negative",
 		},
 		{
@@ -321,7 +321,7 @@ func TestNewRejectsBadInput(t *testing.T) {
 }
 
 func TestPreviewAppliesOperationsInOrder(t *testing.T) {
-	remove := ops.DefaultConfig(ops.KindRemove)
+	remove := ops.DefaultConfig(ops.KindReplace)
 	remove.Target = "IMG_"
 	lower := ops.DefaultConfig(ops.KindUpper)
 	increment := ops.DefaultConfig(ops.KindIncrement)
@@ -397,5 +397,24 @@ func TestDefaultConfig(t *testing.T) {
 				t.Errorf("DefaultConfig(%q) = %+v, want %+v", tt.kind, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestKindsContainsOnlySupportedMenuOperations(t *testing.T) {
+	want := []ops.Kind{
+		ops.KindReplace,
+		ops.KindInsert,
+		ops.KindIncrement,
+		ops.KindLower,
+		ops.KindUpper,
+		ops.KindTruncate,
+	}
+	if len(ops.Kinds) != len(want) {
+		t.Fatalf("Kinds = %v, want %v", ops.Kinds, want)
+	}
+	for i := range want {
+		if ops.Kinds[i] != want[i] {
+			t.Errorf("Kinds[%d] = %q, want %q", i, ops.Kinds[i], want[i])
+		}
 	}
 }
